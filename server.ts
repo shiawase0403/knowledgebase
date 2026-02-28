@@ -147,7 +147,8 @@ app.get('/api/search', (req, res) => {
     FROM search_index 
     WHERE search_index MATCH ?
   `;
-  const params: any[] = [`"${q}"*`];
+  // For trigram, we just need the exact phrase wrapped in quotes
+  const params: any[] = [`"${q}"`];
 
   if (subject_id) {
     query += ' AND subject_id = ?';

@@ -8,6 +8,14 @@ const db = new Database(dbPath);
 // Enable foreign keys
 db.pragma('foreign_keys = ON');
 
+// Check if search_index uses trigram
+const tableInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='search_index'").get() as any;
+const needsMigration = tableInfo && !tableInfo.sql.includes('trigram');
+
+if (needsMigration) {
+  db.exec('DROP TABLE IF EXISTS search_index');
+}
+
 // Initialize schema
 db.exec(`
   CREATE TABLE IF NOT EXISTS subjects (
@@ -60,7 +68,8 @@ db.exec(`
     task_id UNINDEXED,
     subject_id UNINDEXED,
     content,
-    ocr_text
+    ocr_text,
+    tokenize='trigram'
   );
 
   -- Triggers to keep search_index updated
@@ -118,6 +127,25 @@ if (getSubjects.all().length === 0) {
   subjects.forEach((name, i) => {
     insertSubject.run(`sub_${i + 1}`, name);
   });
+}
+
+if (needsMigration) {
+  console.log('Migrating search_index to use trigram tokenizer...');
+  db.exec(`
+    INSERT INTO search_index(entity_type, entity_id, task_id, subject_id, content)
+    SELECT 'task', id, id, subject_id, title FROM tasks;
+    
+    INSERT INTO search_index(entity_type, entity_id, task_id, subject_id, content, ocr_text)
+    SELECT 'question', questions.id, questions.task_id, tasks.subject_id,
+           COALESCE(questions.content, '') || ' ' || COALESCE(questions.answer_content, ''),
+           COALESCE(questions.ocr_text, '') || ' ' || COALESCE(questions.answer_ocr_text, '')
+    FROM questions JOIN tasks ON questions.task_id = tasks.id;
+    
+    INSERT INTO search_index(entity_type, entity_id, task_id, subject_id, content, ocr_text)
+    SELECT 'node', nodes.id, nodes.task_id, tasks.subject_id, nodes.content, nodes.ocr_text
+    FROM nodes JOIN tasks ON nodes.task_id = tasks.id;
+  `);
+  console.log('Migration complete.');
 }
 
 export default db;

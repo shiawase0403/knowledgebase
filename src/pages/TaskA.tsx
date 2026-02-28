@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
+import { extractTextFromImage } from '../services/ocr';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
-import { Camera, FileText, Plus, ChevronDown, ChevronUp, ArrowLeft, Trash2 } from 'lucide-react';
+import { Camera, FileText, Plus, ChevronDown, ChevronUp, ArrowLeft, Trash2, Loader2 } from 'lucide-react';
 
 export default function TaskA() {
   const { id } = useParams();
@@ -15,6 +16,7 @@ export default function TaskA() {
   const [answerContent, setAnswerContent] = useState('');
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -46,16 +48,29 @@ export default function TaskA() {
     const file = e.target.files?.[0];
     if (!file || !id) return;
     
-    const { url } = await api.uploadFile(file);
-    const isImage = file.type.startsWith('image/');
-    
-    const data = {
-      task_id: id,
-      [type === 'question' ? (isImage ? 'image_url' : 'pdf_url') : (isImage ? 'answer_image_url' : 'answer_pdf_url')]: url
-    };
-    
-    const newQ = await api.createQuestion(data);
-    setQuestions([newQ, ...questions]);
+    setIsUploading(true);
+    try {
+      const { url } = await api.uploadFile(file);
+      const isImage = file.type.startsWith('image/');
+      
+      let ocr_text = '';
+      if (isImage) {
+        ocr_text = await extractTextFromImage(file);
+      }
+      
+      const data = {
+        task_id: id,
+        [type === 'question' ? (isImage ? 'image_url' : 'pdf_url') : (isImage ? 'answer_image_url' : 'answer_pdf_url')]: url,
+        [type === 'question' ? 'ocr_text' : 'answer_ocr_text']: ocr_text
+      };
+      
+      const newQ = await api.createQuestion(data);
+      setQuestions([newQ, ...questions]);
+    } catch (error) {
+      console.error("Upload failed", error);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const toggleExpand = (qId: string) => {
@@ -94,8 +109,8 @@ export default function TaskA() {
             capture="environment"
             onChange={e => handleFileUpload(e, 'question')}
           />
-          <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
-            <Camera className="h-4 w-4" />
+          <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
+            {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
           </Button>
         </div>
       </Card>

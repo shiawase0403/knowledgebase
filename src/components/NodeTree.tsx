@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { api } from '../services/api';
+import { extractTextFromImage } from '../services/ocr';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { ChevronRight, ChevronDown, Plus, Image as ImageIcon, FileText, Trash2 } from 'lucide-react';
+import { ChevronRight, ChevronDown, Plus, Image as ImageIcon, FileText, Trash2, Loader2 } from 'lucide-react';
 
 interface Node {
   id: string;
@@ -10,6 +11,7 @@ interface Node {
   content: string;
   image_url: string | null;
   pdf_url: string | null;
+  ocr_text: string | null;
   children?: Node[];
 }
 
@@ -67,17 +69,34 @@ function TreeNode({ node, taskId, onUpdate }: { key?: string, node: Node, taskId
     onUpdate();
   };
 
+  const [isUploading, setIsUploading] = useState(false);
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const { url } = await api.uploadFile(file);
-    const isImage = file.type.startsWith('image/');
-    await api.updateNode(node.id, { 
-      content: node.content,
-      image_url: isImage ? url : node.image_url,
-      pdf_url: !isImage ? url : node.pdf_url
-    });
-    onUpdate();
+    
+    setIsUploading(true);
+    try {
+      const { url } = await api.uploadFile(file);
+      const isImage = file.type.startsWith('image/');
+      
+      let ocr_text = '';
+      if (isImage) {
+        ocr_text = await extractTextFromImage(file);
+      }
+
+      await api.updateNode(node.id, { 
+        content: node.content,
+        image_url: isImage ? url : node.image_url,
+        pdf_url: !isImage ? url : node.pdf_url,
+        ocr_text: ocr_text || node.ocr_text
+      });
+      onUpdate();
+    } catch (error) {
+      console.error("Upload failed", error);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   return (
@@ -126,10 +145,14 @@ function TreeNode({ node, taskId, onUpdate }: { key?: string, node: Node, taskId
         </div>
 
         <div className="flex items-center space-x-1 ml-2 text-zinc-400 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-          <label className="cursor-pointer p-1 hover:text-zinc-900 rounded">
-            <input type="file" className="hidden" accept="image/*,application/pdf" onChange={handleFileUpload} />
-            <ImageIcon className="h-3.5 w-3.5" />
-          </label>
+          {isUploading ? (
+            <div className="p-1"><Loader2 className="h-3.5 w-3.5 animate-spin" /></div>
+          ) : (
+            <label className="cursor-pointer p-1 hover:text-zinc-900 rounded">
+              <input type="file" className="hidden" accept="image/*,application/pdf" onChange={handleFileUpload} />
+              <ImageIcon className="h-3.5 w-3.5" />
+            </label>
+          )}
           <button onClick={handleDelete} className={`p-1 rounded ${confirmDelete ? 'text-red-600 font-bold text-xs' : 'hover:text-red-600'}`}>
             {confirmDelete ? 'Sure?' : <Trash2 className="h-3.5 w-3.5" />}
           </button>
