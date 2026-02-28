@@ -5,7 +5,7 @@ import { extractTextFromImage } from '../services/ocr';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
-import { Camera, FileText, Plus, ChevronDown, ChevronUp, ArrowLeft, Trash2, Loader2 } from 'lucide-react';
+import { Camera, FileText, Plus, ChevronDown, ChevronUp, ArrowLeft, Trash2, Loader2, Image as ImageIcon } from 'lucide-react';
 
 export default function TaskA() {
   const { id } = useParams();
@@ -142,11 +142,10 @@ export default function TaskA() {
             multiple
             className="hidden" 
             ref={fileInputRef}
-            capture="environment"
             onChange={e => handleFileUpload(e, 'question')}
           />
-          <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
-            {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+          <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading} title="Upload Images/PDFs">
+            {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageIcon className="h-4 w-4" />}
           </Button>
         </div>
       </Card>

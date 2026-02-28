@@ -3,7 +3,7 @@ import { api } from '../services/api';
 import { extractTextFromImage } from '../services/ocr';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { ChevronRight, ChevronDown, Plus, Image as ImageIcon, FileText, Trash2, Loader2 } from 'lucide-react';
+import { ChevronRight, ChevronDown, Plus, Image as ImageIcon, FileText, Trash2, Loader2, Import } from 'lucide-react';
 
 interface Node {
   id: string;
@@ -192,16 +192,16 @@ function TreeNode({ node, taskId, onUpdate }: { key?: string, node: Node, taskId
           {renderMedia(node.pdf_url, true)}
         </div>
 
-        <div className="flex items-center space-x-1 ml-2 text-zinc-400 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center space-x-1 ml-2 text-zinc-400 transition-opacity">
           {isUploading ? (
             <div className="p-1"><Loader2 className="h-3.5 w-3.5 animate-spin" /></div>
           ) : (
-            <label className="cursor-pointer p-1 hover:text-zinc-900 rounded">
+            <label className="cursor-pointer p-1 hover:text-zinc-900 rounded" title="Upload Image/PDF">
               <input type="file" multiple className="hidden" accept="image/*,application/pdf" onChange={handleFileUpload} />
               <ImageIcon className="h-3.5 w-3.5" />
             </label>
           )}
-          <button onClick={handleDelete} className={`p-1 rounded ${confirmDelete ? 'text-red-600 font-bold text-xs' : 'hover:text-red-600'}`}>
+          <button onClick={handleDelete} className={`p-1 rounded ${confirmDelete ? 'text-red-600 font-bold text-xs' : 'hover:text-red-600'}`} title="Delete Node">
             {confirmDelete ? 'Sure?' : <Trash2 className="h-3.5 w-3.5" />}
           </button>
         </div>
@@ -224,6 +224,7 @@ function TreeNode({ node, taskId, onUpdate }: { key?: string, node: Node, taskId
 function AddNode({ parentId, taskId, onUpdate }: { parentId: string | null, taskId: string, onUpdate: () => void }) {
   const [content, setContent] = useState('');
   const [isAdding, setIsAdding] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
 
   const handleAdd = async () => {
     if (!content.trim()) {
@@ -236,14 +237,119 @@ function AddNode({ parentId, taskId, onUpdate }: { parentId: string | null, task
     onUpdate();
   };
 
+  const parseMarkdownTree = (text: string) => {
+    const lines = text.split('\n');
+    const rootNodes: any[] = [];
+    const stack: { indent: number, node: any }[] = [];
+
+    let isCodeBlock = false;
+
+    for (let i = 0; i < lines.length; i++) {
+      let line = lines[i].replace(/\r/g, '');
+
+      // Ignore code blocks
+      if (line.trim().startsWith('```')) {
+        isCodeBlock = !isCodeBlock;
+        continue;
+      }
+      if (isCodeBlock) continue;
+
+      if (!line.trim()) continue;
+
+      let indent = 0;
+      let content = line.trim();
+
+      // Handle headings vs lists
+      const headingMatch = line.match(/^(#+)\s+(.*)$/);
+      if (headingMatch) {
+        // Headings get negative indent so they are always parents of lists
+        indent = headingMatch[1].length * 100 - 1000; 
+        content = headingMatch[2].trim();
+      } else {
+        // Calculate physical indentation
+        const leadingWhitespace = line.match(/^(\s*)/)?.[1] || '';
+        indent = leadingWhitespace.replace(/\t/g, '    ').length;
+        // Remove list markers (- * + 1.)
+        content = content.replace(/^([-*+]|\d+\.)\s+/, '').trim();
+      }
+
+      if (!content) continue;
+
+      let image_url = null;
+      const imgMatch = content.match(/!\[.*?\]\((.*?)\)/);
+      if (imgMatch) {
+        image_url = imgMatch[1];
+        content = content.replace(imgMatch[0], '').trim();
+      }
+
+      const newNode = { content, image_url, children: [] };
+
+      // Pop stack until we find a parent with a strictly smaller indent
+      while (stack.length > 0 && stack[stack.length - 1].indent >= indent) {
+        stack.pop();
+      }
+
+      if (stack.length === 0) {
+        rootNodes.push(newNode);
+      } else {
+        stack[stack.length - 1].node.children.push(newNode);
+      }
+
+      stack.push({ indent, node: newNode });
+    }
+    return rootNodes;
+  };
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setIsImporting(true);
+    try {
+      const text = await file.text();
+      let tree: any[] = [];
+      
+      // Try parsing as JSON first
+      try {
+        const json = JSON.parse(text);
+        if (Array.isArray(json)) {
+          tree = json;
+        }
+      } catch (err) {
+        // Fallback to robust Markdown parser
+        tree = parseMarkdownTree(text);
+      }
+
+      if (tree.length > 0) {
+        await api.importNodes(taskId, parentId, tree);
+        onUpdate();
+      } else {
+        alert("未能识别到有效的内容，请检查文件格式。");
+      }
+    } catch (error) {
+      console.error("Import failed", error);
+      alert("导入失败，请查看控制台。");
+    } finally {
+      setIsImporting(false);
+      e.target.value = '';
+    }
+  };
+
   if (!isAdding) {
     return (
-      <button 
-        onClick={() => setIsAdding(true)}
-        className="flex items-center text-xs text-zinc-400 hover:text-zinc-900 py-1"
-      >
-        <Plus className="h-3 w-3 mr-1" /> Add node
-      </button>
+      <div className="flex items-center space-x-4">
+        <button 
+          onClick={() => setIsAdding(true)}
+          className="flex items-center text-xs text-zinc-400 hover:text-zinc-900 py-1"
+        >
+          <Plus className="h-3 w-3 mr-1" /> Add node
+        </button>
+        <label className="flex items-center text-xs text-zinc-400 hover:text-zinc-900 py-1 cursor-pointer">
+          <input type="file" accept=".md,.txt,.json" className="hidden" onChange={handleImport} disabled={isImporting} />
+          {isImporting ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Import className="h-3 w-3 mr-1" />}
+          Import
+        </label>
+      </div>
     );
   }
 

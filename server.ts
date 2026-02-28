@@ -123,6 +123,50 @@ app.delete('/api/nodes/:id', (req, res) => {
   res.json({ success: true });
 });
 
+// Import nodes from Markdown tree
+app.post('/api/nodes/import', (req, res) => {
+  const { task_id, parent_id, tree } = req.body;
+  if (!task_id || !tree || !Array.isArray(tree)) {
+    return res.status(400).json({ error: 'Invalid payload' });
+  }
+
+  const insertNode = db.prepare(`
+    INSERT INTO nodes (id, task_id, parent_id, content, image_url, order_index)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+
+  const insertTree = (nodes: any[], currentParentId: string | null, startIndex: number = 0) => {
+    let order = startIndex;
+    for (const node of nodes) {
+      const id = crypto.randomUUID();
+      insertNode.run(id, task_id, currentParentId, node.content, node.image_url || null, order++);
+      if (node.children && node.children.length > 0) {
+        insertTree(node.children, id, 0);
+      }
+    }
+  };
+
+  try {
+    const transaction = db.transaction(() => {
+      let startOrder = 0;
+      if (parent_id) {
+        const result = db.prepare('SELECT MAX(order_index) as maxOrder FROM nodes WHERE task_id = ? AND parent_id = ?').get(task_id, parent_id) as any;
+        if (result && result.maxOrder !== null) startOrder = result.maxOrder + 1;
+      } else {
+        const result = db.prepare('SELECT MAX(order_index) as maxOrder FROM nodes WHERE task_id = ? AND parent_id IS NULL').get(task_id) as any;
+        if (result && result.maxOrder !== null) startOrder = result.maxOrder + 1;
+      }
+      insertTree(tree, parent_id || null, startOrder);
+    });
+    
+    transaction();
+    res.json({ success: true });
+  } catch (e) {
+    console.error('Import failed:', e);
+    res.status(500).json({ error: 'Import failed' });
+  }
+});
+
 // File upload endpoint
 app.post('/api/upload', upload.single('file'), async (req, res) => {
   if (!req.file) {

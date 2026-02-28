@@ -65,6 +65,14 @@ export const api = {
     });
     return res.json();
   },
+  importNodes: async (taskId: string, parentId: string | null, tree: any[]) => {
+    const res = await fetch(`${API_BASE}/nodes/import`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_id: taskId, parent_id: parentId, tree })
+    });
+    return res.json();
+  },
   uploadFile: async (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
