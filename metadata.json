@@ -1,0 +1,5 @@
+{
+  "name": "High School Knowledge Base",
+  "description": "A task management and knowledge base system for high school seniors, featuring subject-based tasks, question collections, and recursive knowledge outlines.",
+  "requestFramePermissions": ["camera"]
+}
