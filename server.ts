@@ -25,7 +25,7 @@ const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const date = new Date();
     const folder = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-    const uploadPath = path.join(process.cwd(), 'uploads', folder);
+    const uploadPath = path.join(process.cwd(), 'data', 'uploads', folder);
     fs.mkdirSync(uploadPath, { recursive: true });
     cb(null, uploadPath);
   },
@@ -38,7 +38,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 // Serve uploaded files statically
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+app.use('/uploads', express.static(path.join(process.cwd(), 'data', 'uploads')));
 
 // --- API Routes ---
 

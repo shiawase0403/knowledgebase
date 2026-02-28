@@ -14,6 +14,9 @@ RUN npm install
 # 复制所有源代码
 COPY . .
 
+# 创建数据目录并设置权限
+RUN mkdir -p data/uploads
+
 # 构建前端 Vite 应用
 RUN npm run build
 
