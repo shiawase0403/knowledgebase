@@ -6,6 +6,7 @@ import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import db from './src/db.ts';
 import crypto from 'crypto';
+import sharp from 'sharp';
 
 const app = express();
 const PORT = 3000;
@@ -123,13 +124,30 @@ app.delete('/api/nodes/:id', (req, res) => {
 });
 
 // File upload endpoint
-app.post('/api/upload', upload.single('file'), (req, res) => {
+app.post('/api/upload', upload.single('file'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
   const date = new Date();
   const folder = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
   const relativeUrl = `/uploads/${folder}/${req.file.filename}`;
+
+  // Generate thumbnail if it's an image
+  if (req.file.mimetype.startsWith('image/')) {
+    try {
+      const ext = path.extname(req.file.filename);
+      const baseName = path.basename(req.file.filename, ext);
+      const thumbFilename = `${baseName}-thumb${ext}`;
+      const thumbPath = path.join(req.file.destination, thumbFilename);
+      
+      await sharp(req.file.path)
+        .resize(200, 200, { fit: 'inside', withoutEnlargement: true })
+        .toFile(thumbPath);
+    } catch (e) {
+      console.error('Thumbnail generation failed:', e);
+    }
+  }
+
   res.json({ url: relativeUrl });
 });
 
@@ -138,27 +156,82 @@ app.get('/api/search', (req, res) => {
   const { q, subject_id } = req.query;
   if (!q) return res.json([]);
 
-  // Use FTS5 snippet for highlighting
-  let query = `
-    SELECT 
-      rowid, entity_type, entity_id, task_id, subject_id,
-      snippet(search_index, 4, '<mark>', '</mark>', '...', 64) as content_snippet,
-      snippet(search_index, 5, '<mark>', '</mark>', '...', 64) as ocr_snippet
-    FROM search_index 
-    WHERE search_index MATCH ?
+  const keyword = String(q);
+  const searchPattern = `%${keyword}%`;
+  const subj = subject_id ? String(subject_id) : null;
+
+  // Abandon FTS5 tokenization. Use pure LIKE for exact substring matching across all text fields.
+  const query = `
+    SELECT 'task' as entity_type, id as entity_id, id as task_id, subject_id, 
+           title as task_title, title as content_raw, NULL as ocr_raw, NULL as image_url
+    FROM tasks
+    WHERE title LIKE ? AND (? IS NULL OR subject_id = ?)
+    
+    UNION ALL
+    
+    SELECT 'question' as entity_type, q.id as entity_id, q.task_id, t.subject_id, 
+           t.title as task_title, 
+           COALESCE(q.content, '') || ' ' || COALESCE(q.answer_content, '') as content_raw, 
+           COALESCE(q.ocr_text, '') || ' ' || COALESCE(q.answer_ocr_text, '') as ocr_raw, 
+           q.image_url
+    FROM questions q
+    JOIN tasks t ON q.task_id = t.id
+    WHERE (q.content LIKE ? OR q.ocr_text LIKE ? OR q.answer_content LIKE ? OR q.answer_ocr_text LIKE ?)
+      AND (? IS NULL OR t.subject_id = ?)
+      
+    UNION ALL
+    
+    SELECT 'node' as entity_type, n.id as entity_id, n.task_id, t.subject_id, 
+           t.title as task_title, n.content as content_raw, n.ocr_text as ocr_raw, n.image_url
+    FROM nodes n
+    JOIN tasks t ON n.task_id = t.id
+    WHERE (n.content LIKE ? OR n.ocr_text LIKE ?)
+      AND (? IS NULL OR t.subject_id = ?)
+      
+    LIMIT 50
   `;
-  // For trigram, we just need the exact phrase wrapped in quotes
-  const params: any[] = [`"${q}"`];
-
-  if (subject_id) {
-    query += ' AND subject_id = ?';
-    params.push(subject_id);
-  }
-
-  query += ' ORDER BY rank LIMIT 50';
 
   try {
-    const results = db.prepare(query).all(...params);
+    const rawResults = db.prepare(query).all(
+      searchPattern, subj, subj,
+      searchPattern, searchPattern, searchPattern, searchPattern, subj, subj,
+      searchPattern, searchPattern, subj, subj
+    );
+
+    // Simple JS highlighter since we dropped FTS5
+    const highlight = (text: string | null, kw: string) => {
+      if (!text) return null;
+      const escapedText = text.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const escapedKeyword = kw.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      
+      const regex = new RegExp(`(${escapedKeyword})`, 'gi');
+      const matchIndex = escapedText.search(regex);
+      
+      if (matchIndex === -1) {
+        return escapedText.length > 60 ? escapedText.substring(0, 60) + '...' : escapedText;
+      }
+      
+      const start = Math.max(0, matchIndex - 30);
+      const end = Math.min(escapedText.length, matchIndex + kw.length + 30);
+      let snippet = escapedText.substring(start, end);
+      if (start > 0) snippet = '...' + snippet;
+      if (end < escapedText.length) snippet = snippet + '...';
+      
+      return snippet.replace(regex, '<mark>$1</mark>');
+    };
+
+    const results = rawResults.map((r: any) => ({
+      rowid: r.entity_id,
+      entity_type: r.entity_type,
+      entity_id: r.entity_id,
+      task_id: r.task_id,
+      subject_id: r.subject_id,
+      task_title: r.task_title,
+      image_url: r.image_url,
+      content_snippet: highlight(r.content_raw, keyword),
+      ocr_snippet: highlight(r.ocr_raw, keyword)
+    }));
+
     res.json(results);
   } catch (e) {
     console.error(e);

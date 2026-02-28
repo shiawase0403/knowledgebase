@@ -72,24 +72,55 @@ function TreeNode({ node, taskId, onUpdate }: { key?: string, node: Node, taskId
   const [isUploading, setIsUploading] = useState(false);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
     
     setIsUploading(true);
     try {
-      const { url } = await api.uploadFile(file);
-      const isImage = file.type.startsWith('image/');
-      
-      let ocr_text = '';
-      if (isImage) {
-        ocr_text = await extractTextFromImage(file);
+      const imageUrls: string[] = [];
+      const pdfUrls: string[] = [];
+      let combinedOcrText = '';
+
+      // Parse existing URLs if any
+      try {
+        if (node.image_url) {
+          const parsed = JSON.parse(node.image_url);
+          if (Array.isArray(parsed)) imageUrls.push(...parsed);
+          else imageUrls.push(node.image_url);
+        }
+      } catch (e) {
+        if (node.image_url) imageUrls.push(node.image_url);
+      }
+
+      try {
+        if (node.pdf_url) {
+          const parsed = JSON.parse(node.pdf_url);
+          if (Array.isArray(parsed)) pdfUrls.push(...parsed);
+          else pdfUrls.push(node.pdf_url);
+        }
+      } catch (e) {
+        if (node.pdf_url) pdfUrls.push(node.pdf_url);
+      }
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const { url } = await api.uploadFile(file);
+        const isImage = file.type.startsWith('image/');
+        
+        if (isImage) {
+          imageUrls.push(url);
+          const ocr_text = await extractTextFromImage(file);
+          if (ocr_text) combinedOcrText += ocr_text + '\n';
+        } else {
+          pdfUrls.push(url);
+        }
       }
 
       await api.updateNode(node.id, { 
         content: node.content,
-        image_url: isImage ? url : node.image_url,
-        pdf_url: !isImage ? url : node.pdf_url,
-        ocr_text: ocr_text || node.ocr_text
+        image_url: imageUrls.length > 0 ? JSON.stringify(imageUrls) : node.image_url,
+        pdf_url: pdfUrls.length > 0 ? JSON.stringify(pdfUrls) : node.pdf_url,
+        ocr_text: combinedOcrText ? ((node.ocr_text || '') + '\n' + combinedOcrText).trim() : node.ocr_text
       });
       onUpdate();
     } catch (error) {
@@ -97,6 +128,29 @@ function TreeNode({ node, taskId, onUpdate }: { key?: string, node: Node, taskId
     } finally {
       setIsUploading(false);
     }
+  };
+
+  const renderMedia = (urlData: string | null, isPdf: boolean = false) => {
+    if (!urlData) return null;
+    let urls: string[] = [];
+    try {
+      urls = JSON.parse(urlData);
+      if (!Array.isArray(urls)) urls = [urlData];
+    } catch (e) {
+      urls = [urlData];
+    }
+    
+    if (isPdf) {
+      return urls.map((url, i) => (
+        <a key={i} href={url} target="_blank" rel="noreferrer" className="flex items-center text-blue-600 text-xs mt-2">
+          <FileText className="h-3 w-3 mr-1" /> View PDF {urls.length > 1 ? i + 1 : ''}
+        </a>
+      ));
+    }
+    
+    return urls.map((url, i) => (
+      <img key={i} src={url} alt="Node attachment" className="mt-2 rounded-md max-w-full h-auto max-h-48 object-cover" />
+    ));
   };
 
   return (
@@ -134,14 +188,8 @@ function TreeNode({ node, taskId, onUpdate }: { key?: string, node: Node, taskId
             </div>
           )}
 
-          {node.image_url && (
-            <img src={node.image_url} alt="Node attachment" className="mt-2 rounded-md max-w-full h-auto max-h-48 object-cover" />
-          )}
-          {node.pdf_url && (
-            <a href={node.pdf_url} target="_blank" rel="noreferrer" className="flex items-center text-blue-600 text-xs mt-2">
-              <FileText className="h-3 w-3 mr-1" /> View PDF
-            </a>
-          )}
+          {renderMedia(node.image_url, false)}
+          {renderMedia(node.pdf_url, true)}
         </div>
 
         <div className="flex items-center space-x-1 ml-2 text-zinc-400 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
@@ -149,7 +197,7 @@ function TreeNode({ node, taskId, onUpdate }: { key?: string, node: Node, taskId
             <div className="p-1"><Loader2 className="h-3.5 w-3.5 animate-spin" /></div>
           ) : (
             <label className="cursor-pointer p-1 hover:text-zinc-900 rounded">
-              <input type="file" className="hidden" accept="image/*,application/pdf" onChange={handleFileUpload} />
+              <input type="file" multiple className="hidden" accept="image/*,application/pdf" onChange={handleFileUpload} />
               <ImageIcon className="h-3.5 w-3.5" />
             </label>
           )}

@@ -45,23 +45,34 @@ export default function TaskA() {
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'question' | 'answer') => {
-    const file = e.target.files?.[0];
-    if (!file || !id) return;
+    const files = e.target.files;
+    if (!files || files.length === 0 || !id) return;
     
     setIsUploading(true);
     try {
-      const { url } = await api.uploadFile(file);
-      const isImage = file.type.startsWith('image/');
-      
-      let ocr_text = '';
-      if (isImage) {
-        ocr_text = await extractTextFromImage(file);
+      const imageUrls: string[] = [];
+      const pdfUrls: string[] = [];
+      let combinedOcrText = '';
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const { url } = await api.uploadFile(file);
+        const isImage = file.type.startsWith('image/');
+        
+        if (isImage) {
+          imageUrls.push(url);
+          const ocr_text = await extractTextFromImage(file);
+          if (ocr_text) combinedOcrText += ocr_text + '\n';
+        } else {
+          pdfUrls.push(url);
+        }
       }
       
       const data = {
         task_id: id,
-        [type === 'question' ? (isImage ? 'image_url' : 'pdf_url') : (isImage ? 'answer_image_url' : 'answer_pdf_url')]: url,
-        [type === 'question' ? 'ocr_text' : 'answer_ocr_text']: ocr_text
+        [type === 'question' ? 'image_url' : 'answer_image_url']: imageUrls.length > 0 ? JSON.stringify(imageUrls) : undefined,
+        [type === 'question' ? 'pdf_url' : 'answer_pdf_url']: pdfUrls.length > 0 ? JSON.stringify(pdfUrls) : undefined,
+        [type === 'question' ? 'ocr_text' : 'answer_ocr_text']: combinedOcrText
       };
       
       const newQ = await api.createQuestion(data);
@@ -70,7 +81,31 @@ export default function TaskA() {
       console.error("Upload failed", error);
     } finally {
       setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
+  };
+
+  const renderMedia = (urlData: string | null, isPdf: boolean = false) => {
+    if (!urlData) return null;
+    let urls: string[] = [];
+    try {
+      urls = JSON.parse(urlData);
+      if (!Array.isArray(urls)) urls = [urlData];
+    } catch (e) {
+      urls = [urlData];
+    }
+    
+    if (isPdf) {
+      return urls.map((url, i) => (
+        <a key={i} href={url} target="_blank" rel="noreferrer" className="flex items-center text-blue-600 text-sm mt-2">
+          <FileText className="h-4 w-4 mr-1" /> View PDF {urls.length > 1 ? i + 1 : ''}
+        </a>
+      ));
+    }
+    
+    return urls.map((url, i) => (
+      <img key={i} src={url} alt="Attachment" className="mt-2 rounded-md w-full object-cover" />
+    ));
   };
 
   const toggleExpand = (qId: string) => {
@@ -104,6 +139,7 @@ export default function TaskA() {
           <input 
             type="file" 
             accept="image/*,application/pdf" 
+            multiple
             className="hidden" 
             ref={fileInputRef}
             capture="environment"
@@ -126,12 +162,8 @@ export default function TaskA() {
             </button>
             <CardHeader className="p-4 bg-zinc-50 pr-10">
               {q.content && <p className="text-sm font-medium">{q.content}</p>}
-              {q.image_url && <img src={q.image_url} alt="Question" className="mt-2 rounded-md w-full object-cover" />}
-              {q.pdf_url && (
-                <a href={q.pdf_url} target="_blank" rel="noreferrer" className="flex items-center text-blue-600 text-sm mt-2">
-                  <FileText className="h-4 w-4 mr-1" /> View PDF
-                </a>
-              )}
+              {renderMedia(q.image_url, false)}
+              {renderMedia(q.pdf_url, true)}
             </CardHeader>
             
             {(q.answer_content || q.answer_image_url || q.answer_pdf_url) && (
@@ -147,12 +179,8 @@ export default function TaskA() {
                 {expanded[q.id] && (
                   <CardContent className="p-4 bg-white">
                     {q.answer_content && <p className="text-sm">{q.answer_content}</p>}
-                    {q.answer_image_url && <img src={q.answer_image_url} alt="Answer" className="mt-2 rounded-md w-full object-cover" />}
-                    {q.answer_pdf_url && (
-                      <a href={q.answer_pdf_url} target="_blank" rel="noreferrer" className="flex items-center text-blue-600 text-sm mt-2">
-                        <FileText className="h-4 w-4 mr-1" /> View PDF Answer
-                      </a>
-                    )}
+                    {renderMedia(q.answer_image_url, false)}
+                    {renderMedia(q.answer_pdf_url, true)}
                   </CardContent>
                 )}
               </div>
