@@ -19,6 +19,8 @@ export default function TaskA() {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [confirmDeleteTask, setConfirmDeleteTask] = useState(false);
+
   useEffect(() => {
     if (id) {
       api.getQuestions(id).then(setQuestions);
@@ -42,6 +44,17 @@ export default function TaskA() {
     await api.deleteQuestion(qId);
     setQuestions(questions.filter(q => q.id !== qId));
     setConfirmDelete(null);
+  };
+
+  const handleDeleteTask = async () => {
+    if (!id) return;
+    if (!confirmDeleteTask) {
+      setConfirmDeleteTask(true);
+      setTimeout(() => setConfirmDeleteTask(false), 3000);
+      return;
+    }
+    await api.deleteTask(id);
+    navigate(-1);
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'question' | 'answer') => {
@@ -113,12 +126,23 @@ export default function TaskA() {
   };
 
   return (
-    <div className="p-4 max-w-md mx-auto space-y-6 pb-24">
-      <div className="flex items-center space-x-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-          <ArrowLeft className="h-5 w-5" />
+    <div className="p-4 max-w-4xl mx-auto space-y-6 pb-24">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <h1 className="text-xl font-bold truncate">{location.state?.title || 'Question Collection'}</h1>
+        </div>
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          onClick={handleDeleteTask}
+          className={confirmDeleteTask ? 'text-red-600 font-bold' : 'text-zinc-400 hover:text-red-600'}
+          title="Delete Task"
+        >
+          {confirmDeleteTask ? 'Sure?' : <Trash2 className="h-5 w-5" />}
         </Button>
-        <h1 className="text-xl font-bold truncate">{location.state?.title || 'Question Collection'}</h1>
       </div>
 
       <Card className="p-4 space-y-4">

@@ -26,7 +26,7 @@ export default function Home() {
   }, [query]);
 
   return (
-    <div className="p-4 max-w-md mx-auto space-y-6">
+    <div className="p-4 max-w-4xl mx-auto space-y-6">
       <div className="relative">
         <Search className="absolute left-3 top-3 h-4 w-4 text-zinc-400" />
         <Input 
@@ -103,7 +103,7 @@ export default function Home() {
       )}
 
       {!query.trim() && (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
           {subjects.map(sub => (
             <Link key={sub.id} to={`/subjects/${sub.id}`}>
               <Card className="hover:bg-zinc-50 transition-colors">

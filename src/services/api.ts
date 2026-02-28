@@ -21,6 +21,12 @@ export const api = {
     const res = await fetch(`${API_BASE}/tasks/${id}`);
     return res.json();
   },
+  deleteTask: async (id: string) => {
+    const res = await fetch(`${API_BASE}/tasks/${id}`, {
+      method: 'DELETE'
+    });
+    return res.json();
+  },
   getQuestions: async (taskId: string) => {
     const res = await fetch(`${API_BASE}/tasks/${taskId}/questions`);
     return res.json();

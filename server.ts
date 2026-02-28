@@ -68,6 +68,12 @@ app.get('/api/tasks/:id', (req, res) => {
   res.json(task);
 });
 
+// Delete a task
+app.delete('/api/tasks/:id', (req, res) => {
+  db.prepare('DELETE FROM tasks WHERE id = ?').run(req.params.id);
+  res.json({ success: true });
+});
+
 // Get questions for a task (Type A)
 app.get('/api/tasks/:taskId/questions', (req, res) => {
   const questions = db.prepare('SELECT * FROM questions WHERE task_id = ? ORDER BY created_at DESC').all(req.params.taskId);
