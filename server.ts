@@ -213,7 +213,7 @@ app.get('/api/search', (req, res) => {
   // Abandon FTS5 tokenization. Use pure LIKE for exact substring matching across all text fields.
   const query = `
     SELECT 'task' as entity_type, id as entity_id, id as task_id, subject_id, 
-           title as task_title, title as content_raw, NULL as ocr_raw, NULL as image_url
+           title as task_title, title as content_raw, NULL as ocr_raw, NULL as image_url, type as task_type
     FROM tasks
     WHERE title LIKE ? AND (? IS NULL OR subject_id = ?)
     
@@ -223,7 +223,7 @@ app.get('/api/search', (req, res) => {
            t.title as task_title, 
            COALESCE(q.content, '') || ' ' || COALESCE(q.answer_content, '') as content_raw, 
            COALESCE(q.ocr_text, '') || ' ' || COALESCE(q.answer_ocr_text, '') as ocr_raw, 
-           q.image_url
+           q.image_url, t.type as task_type
     FROM questions q
     JOIN tasks t ON q.task_id = t.id
     WHERE (q.content LIKE ? OR q.ocr_text LIKE ? OR q.answer_content LIKE ? OR q.answer_ocr_text LIKE ?)
@@ -232,9 +232,11 @@ app.get('/api/search', (req, res) => {
     UNION ALL
     
     SELECT 'node' as entity_type, n.id as entity_id, n.task_id, t.subject_id, 
-           t.title as task_title, n.content as content_raw, n.ocr_text as ocr_raw, n.image_url
+           COALESCE(p.content, t.title) as task_title, 
+           n.content as content_raw, n.ocr_text as ocr_raw, n.image_url, t.type as task_type
     FROM nodes n
     JOIN tasks t ON n.task_id = t.id
+    LEFT JOIN nodes p ON n.parent_id = p.id
     WHERE (n.content LIKE ? OR n.ocr_text LIKE ?)
       AND (? IS NULL OR t.subject_id = ?)
       
@@ -277,6 +279,7 @@ app.get('/api/search', (req, res) => {
       task_id: r.task_id,
       subject_id: r.subject_id,
       task_title: r.task_title,
+      task_type: r.task_type,
       image_url: r.image_url,
       content_snippet: highlight(r.content_raw, keyword),
       ocr_snippet: highlight(r.ocr_raw, keyword)

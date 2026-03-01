@@ -19,9 +19,10 @@ interface NodeTreeProps {
   nodes: Node[];
   taskId: string;
   onUpdate: () => void;
+  highlightNodeId?: string | null;
 }
 
-export function NodeTree({ nodes, taskId, onUpdate }: NodeTreeProps) {
+export function NodeTree({ nodes, taskId, onUpdate, highlightNodeId }: NodeTreeProps) {
   const rootNodes = nodes.filter(n => !n.parent_id);
   
   const buildTree = (parent: Node): Node => {
@@ -36,7 +37,7 @@ export function NodeTree({ nodes, taskId, onUpdate }: NodeTreeProps) {
   return (
     <div className="space-y-1">
       {tree.map(node => (
-        <TreeNode key={node.id} node={node} taskId={taskId} onUpdate={onUpdate} />
+        <TreeNode key={node.id} node={node} taskId={taskId} onUpdate={onUpdate} highlightNodeId={highlightNodeId} />
       ))}
       <div className="pl-6 pt-2">
         <AddNode parentId={null} taskId={taskId} onUpdate={onUpdate} />
@@ -45,11 +46,20 @@ export function NodeTree({ nodes, taskId, onUpdate }: NodeTreeProps) {
   );
 }
 
-function TreeNode({ node, taskId, onUpdate }: { key?: string, node: Node, taskId: string, onUpdate: () => void }) {
+function TreeNode({ node, taskId, onUpdate, highlightNodeId }: { key?: string, node: Node, taskId: string, onUpdate: () => void, highlightNodeId?: string | null }) {
   const [expanded, setExpanded] = useState(true);
   const [editing, setEditing] = useState(false);
   const [content, setContent] = useState(node.content);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const nodeRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (highlightNodeId === node.id) {
+      setTimeout(() => {
+        nodeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 500);
+    }
+  }, [highlightNodeId, node.id]);
 
   const handleUpdate = async () => {
     if (content !== node.content) {
@@ -154,7 +164,7 @@ function TreeNode({ node, taskId, onUpdate }: { key?: string, node: Node, taskId
   };
 
   return (
-    <div className="pl-6 relative">
+    <div ref={nodeRef} className={`pl-6 relative ${highlightNodeId === node.id ? 'bg-yellow-100/50 rounded-lg ring-2 ring-yellow-400 ring-offset-2 transition-all duration-500' : ''}`}>
       <div className="flex items-start group py-1">
         <button 
           onClick={() => setExpanded(!expanded)} 
@@ -210,7 +220,7 @@ function TreeNode({ node, taskId, onUpdate }: { key?: string, node: Node, taskId
       {expanded && (
         <div className="border-l border-zinc-200 ml-2">
           {node.children?.map(child => (
-            <TreeNode key={child.id} node={child} taskId={taskId} onUpdate={onUpdate} />
+            <TreeNode key={child.id} node={child} taskId={taskId} onUpdate={onUpdate} highlightNodeId={highlightNodeId} />
           ))}
           <div className="pl-6 pt-1">
             <AddNode parentId={node.id} taskId={taskId} onUpdate={onUpdate} />

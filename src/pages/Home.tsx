@@ -58,8 +58,14 @@ export default function Home() {
               
               const thumbUrl = firstImageUrl ? firstImageUrl.replace(/(\.[^.]+)$/, '-thumb$1') : null;
               
+              const linkTo = r.entity_type === 'node' 
+                ? `/tasks/${r.task_id}?nodeId=${r.entity_id}` 
+                : r.entity_type === 'question'
+                  ? `/tasks/${r.task_id}?questionId=${r.entity_id}`
+                  : `/tasks/${r.task_id}`;
+
               return (
-                <Link key={r.rowid} to={`/tasks/${r.task_id}`} className="block">
+                <Link key={r.rowid} to={linkTo} state={{ type: r.task_type, title: r.task_title }} className="block">
                   <Card className="hover:bg-zinc-50 transition-colors">
                     <div className="flex items-start p-4 gap-4">
                       {thumbUrl && (

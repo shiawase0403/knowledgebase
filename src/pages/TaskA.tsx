@@ -20,12 +20,26 @@ export default function TaskA() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [confirmDeleteTask, setConfirmDeleteTask] = useState(false);
+  
+  const queryParams = new URLSearchParams(location.search);
+  const highlightQuestionId = queryParams.get('questionId');
 
   useEffect(() => {
     if (id) {
       api.getQuestions(id).then(setQuestions);
     }
   }, [id]);
+
+  useEffect(() => {
+    if (highlightQuestionId && questions.length > 0) {
+      setTimeout(() => {
+        const el = document.getElementById(`question-${highlightQuestionId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 500);
+    }
+  }, [highlightQuestionId, questions]);
 
   const handleCreate = async () => {
     if (!content.trim() || !id) return;
@@ -176,7 +190,7 @@ export default function TaskA() {
 
       <div className="space-y-4">
         {questions.map(q => (
-          <Card key={q.id} className="overflow-hidden relative group">
+          <Card key={q.id} id={`question-${q.id}`} className={`overflow-hidden relative group ${highlightQuestionId === q.id ? 'ring-2 ring-yellow-400 ring-offset-2 transition-all duration-500' : ''}`}>
             <button 
               onClick={() => handleDelete(q.id)} 
               className={`absolute top-2 right-2 p-1.5 rounded z-10 transition-opacity ${confirmDelete === q.id ? 'text-red-600 bg-red-50 font-bold text-xs opacity-100' : 'text-zinc-400 hover:text-red-600 hover:bg-red-50 opacity-100 md:opacity-0 md:group-hover:opacity-100'}`}

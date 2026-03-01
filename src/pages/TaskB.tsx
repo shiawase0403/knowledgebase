@@ -102,6 +102,9 @@ export default function TaskB() {
 
   const taskTitle = location.state?.title || 'Knowledge Outline';
 
+  const queryParams = new URLSearchParams(location.search);
+  const highlightNodeId = queryParams.get('nodeId');
+
   const fetchNodes = () => {
     if (id) api.getNodes(id).then(setNodes);
   };
@@ -177,7 +180,7 @@ export default function TaskB() {
         </div>
 
         <Card className="p-6 bg-white shadow-sm border-zinc-200">
-          <NodeTree nodes={nodes} taskId={id!} onUpdate={fetchNodes} />
+          <NodeTree nodes={nodes} taskId={id!} onUpdate={fetchNodes} highlightNodeId={highlightNodeId} />
         </Card>
       </div>
       <PrintableView nodes={nodes} title={taskTitle} />
