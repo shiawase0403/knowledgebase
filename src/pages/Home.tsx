@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../services/api';
 import { Card, CardHeader, CardTitle } from '../components/ui/card';
@@ -30,7 +30,7 @@ export default function Home() {
       <div className="relative">
         <Search className="absolute left-3 top-3 h-4 w-4 text-zinc-400" />
         <Input 
-          placeholder="Global Search..." 
+          placeholder="全局搜索..." 
           className="pl-9"
           value={query}
           onChange={e => setQuery(e.target.value)}
@@ -39,9 +39,9 @@ export default function Home() {
 
       {query.trim() && (
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold">Search Results</h2>
+          <h2 className="text-lg font-semibold">搜索结果</h2>
           {results.length === 0 ? (
-            <p className="text-sm text-zinc-500">No results found.</p>
+            <p className="text-sm text-zinc-500">未找到相关结果。</p>
           ) : (
             results.map((r: any) => {
               let firstImageUrl = r.image_url;
@@ -69,11 +69,11 @@ export default function Home() {
                   <Card className="hover:bg-zinc-50 transition-colors">
                     <div className="flex items-start p-4 gap-4">
                       {thumbUrl && (
-                        <div className="shrink-0 w-16 h-16 bg-zinc-100 rounded overflow-hidden border border-zinc-200">
+                        <div className="shrink-0 w-16 h-16 bg-zinc-100 rounded overflow-hidden border border-zinc-200 flex items-center justify-center">
                           <img 
                             src={thumbUrl} 
-                            alt="Thumbnail" 
-                            className="w-full h-full object-cover"
+                            alt="缩略图" 
+                            className="max-w-full max-h-full object-contain"
                             onError={(e) => {
                               // Fallback to original image if thumbnail doesn't exist (for old uploads)
                               if (e.currentTarget.src !== firstImageUrl) {
@@ -86,10 +86,10 @@ export default function Home() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-xs font-semibold px-2 py-0.5 bg-zinc-100 text-zinc-600 rounded">
-                            {r.entity_type.toUpperCase()}
+                            {r.entity_type === 'task' ? '任务' : r.entity_type === 'question' ? '题目' : '节点'}
                           </span>
                           <span className="text-sm font-medium text-zinc-900 truncate">
-                            {r.task_title || 'Unknown Task'}
+                            {r.task_title || '未知任务'}
                           </span>
                         </div>
                         {r.content_snippet && (
@@ -109,17 +109,20 @@ export default function Home() {
       )}
 
       {!query.trim() && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-          {subjects.map(sub => (
-            <Link key={sub.id} to={`/subjects/${sub.id}`}>
-              <Card className="hover:bg-zinc-50 transition-colors">
-                <CardHeader className="p-6 text-center">
-                  <CardTitle>{sub.name}</CardTitle>
-                </CardHeader>
-              </Card>
-            </Link>
-          ))}
-        </div>
+        <>
+          <h2 className="text-xl font-bold text-zinc-800 mb-4">学科分类</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-8">
+            {subjects.map(sub => (
+              <Link key={sub.id} to={`/subjects/${sub.id}`}>
+                <Card className="hover:bg-zinc-50 transition-colors">
+                  <CardHeader className="p-6 text-center">
+                    <CardTitle>{sub.name}</CardTitle>
+                  </CardHeader>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );

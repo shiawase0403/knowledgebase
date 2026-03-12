@@ -1,24 +1,27 @@
-import React, { useEffect, useState } from 'react';
-import { useParams, useLocation, Navigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import { api } from '../services/api';
 import TaskA from './TaskA';
 import TaskB from './TaskB';
+import DictionaryView from './DictionaryView';
 
 export default function TaskRouter() {
   const { id } = useParams();
-  const location = useLocation();
-  const [type, setType] = useState<'A' | 'B' | null>(location.state?.type || null);
+  const [task, setTask] = useState<any>(null);
 
   useEffect(() => {
-    if (!type && id) {
-      api.getTask(id).then(task => {
-        if (task) setType(task.type);
+    if (id) {
+      api.getTask(id).then(t => {
+        if (t) setTask(t);
       });
     }
-  }, [id, type]);
+  }, [id]);
 
-  if (type === 'A') return <TaskA />;
-  if (type === 'B') return <TaskB />;
+  if (!task) return <div className="p-4 text-center">Loading task...</div>;
+
+  if (task.category === 'dictionary') return <DictionaryView task={task} />;
+  if (task.type === 'A') return <TaskA />;
+  if (task.type === 'B') return <TaskB />;
   
-  return <div className="p-4 text-center">Loading task...</div>;
+  return <div className="p-4 text-center">Unknown task type</div>;
 }

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { Card } from '../components/ui/card';
@@ -51,8 +51,8 @@ function PrintableView({ nodes, title }: { nodes: any[], title: string }) {
             {imageUrls.length > 0 && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 mb-4">
                 {imageUrls.map((url, i) => (
-                  <div key={i} className="rounded-lg overflow-hidden border border-zinc-100 bg-zinc-50">
-                    <img src={url} alt="attachment" className="w-full h-auto max-h-[500px] object-contain mx-auto" />
+                  <div key={i} className="rounded-lg overflow-hidden border border-zinc-100 bg-zinc-50 flex items-center justify-center">
+                    <img src={url} alt="attachment" className="max-w-full h-auto max-h-[500px] object-contain mx-auto" />
                   </div>
                 ))}
               </div>
@@ -73,12 +73,12 @@ function PrintableView({ nodes, title }: { nodes: any[], title: string }) {
     <div className="hidden print:block p-12 max-w-4xl mx-auto bg-white text-zinc-900 font-sans leading-normal">
       <header className="mb-16 text-center">
         <div className="inline-block px-3 py-1 mb-4 text-[10px] font-bold tracking-widest uppercase text-zinc-400 border border-zinc-200 rounded-full">
-          Knowledge Outline
+          知识大纲
         </div>
         <h1 className="text-4xl font-extrabold text-zinc-900 tracking-tight mb-4">{title}</h1>
         <div className="w-12 h-1 bg-zinc-900 mx-auto mb-6" />
         <p className="text-sm text-zinc-400 font-medium">
-          Generated on {new Date().toLocaleDateString()}
+          生成于 {new Date().toLocaleDateString()}
         </p>
       </header>
       
@@ -87,7 +87,7 @@ function PrintableView({ nodes, title }: { nodes: any[], title: string }) {
       </main>
 
       <footer className="mt-20 pt-8 border-t border-zinc-100 text-center text-[10px] text-zinc-300 uppercase tracking-widest">
-        End of Document • {title}
+        文档结束 • {title}
       </footer>
     </div>
   );
@@ -100,7 +100,7 @@ export default function TaskB() {
   const [nodes, setNodes] = useState<any[]>([]);
   const [confirmDeleteTask, setConfirmDeleteTask] = useState(false);
 
-  const taskTitle = location.state?.title || 'Knowledge Outline';
+  const taskTitle = location.state?.title || '知识大纲';
 
   const queryParams = new URLSearchParams(location.search);
   const highlightNodeId = queryParams.get('nodeId');
@@ -159,22 +159,22 @@ export default function TaskB() {
             <h1 className="text-xl font-bold truncate">{taskTitle}</h1>
           </div>
           <div className="flex items-center space-x-2">
-            <Button variant="outline" size="sm" onClick={handleExportJson} title="Export JSON">
+            <Button variant="outline" size="sm" onClick={handleExportJson} title="导出 JSON">
               <FileJson className="h-4 w-4 mr-2" />
-              <span className="hidden sm:inline">Export JSON</span>
+              <span className="hidden sm:inline">导出 JSON</span>
             </Button>
-            <Button variant="outline" size="sm" onClick={handleExportPdf} title="Print / Export PDF">
+            <Button variant="outline" size="sm" onClick={handleExportPdf} title="打印 / 导出 PDF">
               <Printer className="h-4 w-4 mr-2" />
-              <span className="hidden sm:inline">Export PDF</span>
+              <span className="hidden sm:inline">导出 PDF</span>
             </Button>
             <Button 
               variant="ghost" 
               size="icon" 
               onClick={handleDeleteTask}
               className={confirmDeleteTask ? 'text-red-600 font-bold' : 'text-zinc-400 hover:text-red-600'}
-              title="Delete Task"
+              title="删除任务"
             >
-              {confirmDeleteTask ? 'Sure?' : <Trash2 className="h-5 w-5" />}
+              {confirmDeleteTask ? '确定删除?' : <Trash2 className="h-5 w-5" />}
             </Button>
           </div>
         </div>

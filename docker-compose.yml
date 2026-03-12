@@ -1,0 +1,15 @@
+version: '3'
+services:
+  quiz-app:
+    build: .
+    container_name: quiz-app
+    restart: always
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - NODE_ENV=production
+      - DATA_DIR=/app/data
+      - GLM_API_KEY=${GLM_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}

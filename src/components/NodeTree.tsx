@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { api } from '../services/api';
 import { extractTextFromImage } from '../services/ocr';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
+import { LatexInput } from './LatexInput';
 import { ChevronRight, ChevronDown, Plus, Image as ImageIcon, FileText, Trash2, Loader2, Import } from 'lucide-react';
+import Latex from 'react-latex-next';
 
 interface Node {
   id: string;
@@ -140,6 +140,27 @@ function TreeNode({ node, taskId, onUpdate, highlightNodeId }: { key?: string, n
     }
   };
 
+  const handleDeleteMedia = async (urlToDelete: string, isPdf: boolean) => {
+    const field = isPdf ? 'pdf_url' : 'image_url';
+    let urls: string[] = [];
+    try {
+      urls = JSON.parse(node[field] || '[]');
+      if (!Array.isArray(urls)) urls = [node[field] as string];
+    } catch (e) {
+      urls = [node[field] as string];
+    }
+
+    const newUrls = urls.filter(u => u !== urlToDelete);
+    await api.updateNode(node.id, {
+      content: node.content,
+      image_url: isPdf ? node.image_url : (newUrls.length > 0 ? JSON.stringify(newUrls) : null),
+      pdf_url: isPdf ? (newUrls.length > 0 ? JSON.stringify(newUrls) : null) : node.pdf_url,
+      ocr_text: node.ocr_text
+    });
+    await api.deleteFile(urlToDelete);
+    onUpdate();
+  };
+
   const renderMedia = (urlData: string | null, isPdf: boolean = false) => {
     if (!urlData) return null;
     let urls: string[] = [];
@@ -152,14 +173,27 @@ function TreeNode({ node, taskId, onUpdate, highlightNodeId }: { key?: string, n
     
     if (isPdf) {
       return urls.map((url, i) => (
-        <a key={i} href={url} target="_blank" rel="noreferrer" className="flex items-center text-blue-600 text-xs mt-2">
-          <FileText className="h-3 w-3 mr-1" /> View PDF {urls.length > 1 ? i + 1 : ''}
-        </a>
+        <div key={i} className="flex items-center justify-between mt-2 bg-zinc-50 p-2 rounded border border-zinc-200">
+          <a href={url} target="_blank" rel="noreferrer" className="flex items-center text-blue-600 text-xs">
+            <FileText className="h-3 w-3 mr-1" /> 查看 PDF {urls.length > 1 ? i + 1 : ''}
+          </a>
+          <button onClick={() => handleDeleteMedia(url, true)} className="text-zinc-400 hover:text-red-600 p-1">
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
       ));
     }
     
     return urls.map((url, i) => (
-      <img key={i} src={url} alt="Node attachment" className="mt-2 rounded-md max-w-full h-auto max-h-48 object-cover" />
+      <div key={i} className="relative mt-2 group/img inline-block mr-2 max-w-full">
+        <img src={url} alt="节点附件" className="rounded-md max-w-full h-auto max-h-48 object-contain" />
+        <button 
+          onClick={() => handleDeleteMedia(url, false)} 
+          className="absolute top-2 right-2 p-1.5 bg-white/80 rounded shadow-sm text-zinc-600 hover:text-red-600 opacity-0 group-hover/img:opacity-100 transition-opacity"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
     ));
   };
 
@@ -181,7 +215,7 @@ function TreeNode({ node, taskId, onUpdate, highlightNodeId }: { key?: string, n
         
         <div className="flex-1 min-w-0">
           {editing ? (
-            <Input 
+            <LatexInput 
               value={content}
               onChange={e => setContent(e.target.value)}
               onBlur={handleUpdate}
@@ -194,7 +228,7 @@ function TreeNode({ node, taskId, onUpdate, highlightNodeId }: { key?: string, n
               className="text-sm py-1 px-2 hover:bg-zinc-100 rounded cursor-text"
               onClick={() => setEditing(true)}
             >
-              {node.content || <span className="text-zinc-400 italic">Empty node</span>}
+              {node.content ? <Latex>{node.content}</Latex> : <span className="text-zinc-400 italic">空节点</span>}
             </div>
           )}
 
@@ -206,13 +240,13 @@ function TreeNode({ node, taskId, onUpdate, highlightNodeId }: { key?: string, n
           {isUploading ? (
             <div className="p-1"><Loader2 className="h-3.5 w-3.5 animate-spin" /></div>
           ) : (
-            <label className="cursor-pointer p-1 hover:text-zinc-900 rounded" title="Upload Image/PDF">
+            <label className="cursor-pointer p-1 hover:text-zinc-900 rounded" title="上传图片/PDF">
               <input type="file" multiple className="hidden" accept="image/*,application/pdf" onChange={handleFileUpload} />
               <ImageIcon className="h-3.5 w-3.5" />
             </label>
           )}
-          <button onClick={handleDelete} className={`p-1 rounded ${confirmDelete ? 'text-red-600 font-bold text-xs' : 'hover:text-red-600'}`} title="Delete Node">
-            {confirmDelete ? 'Sure?' : <Trash2 className="h-3.5 w-3.5" />}
+          <button onClick={handleDelete} className={`p-1 rounded ${confirmDelete ? 'text-red-600 font-bold text-xs' : 'hover:text-red-600'}`} title="删除节点">
+            {confirmDelete ? '确定?' : <Trash2 className="h-3.5 w-3.5" />}
           </button>
         </div>
       </div>
@@ -352,25 +386,25 @@ function AddNode({ parentId, taskId, onUpdate }: { parentId: string | null, task
           onClick={() => setIsAdding(true)}
           className="flex items-center text-xs text-zinc-400 hover:text-zinc-900 py-1"
         >
-          <Plus className="h-3 w-3 mr-1" /> Add node
+          <Plus className="h-3 w-3 mr-1" /> 添加节点
         </button>
         <label className="flex items-center text-xs text-zinc-400 hover:text-zinc-900 py-1 cursor-pointer">
           <input type="file" accept=".md,.txt,.json" className="hidden" onChange={handleImport} disabled={isImporting} />
           {isImporting ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Import className="h-3 w-3 mr-1" />}
-          Import
+          导入
         </label>
       </div>
     );
   }
 
   return (
-    <Input 
+    <LatexInput 
       value={content}
       onChange={e => setContent(e.target.value)}
       onBlur={handleAdd}
       onKeyDown={e => e.key === 'Enter' && handleAdd()}
       autoFocus
-      placeholder="Type to add..."
+      placeholder="输入内容..."
       className="h-8 text-sm"
     />
   );

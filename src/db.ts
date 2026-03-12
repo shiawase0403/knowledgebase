@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 
-const dataDir = path.resolve(process.cwd(), 'data');
+const dataDir = process.env.DATA_DIR || path.resolve(process.cwd(), 'data');
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
@@ -40,18 +40,58 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS questions (
     id TEXT PRIMARY KEY,
     task_id TEXT NOT NULL,
-    content TEXT,
-    image_url TEXT,
+    parent_id TEXT, -- For nested questions (Big Question)
+    type TEXT DEFAULT 'essay', -- 'single', 'multiple', 'essay', 'big', 'fill', 'cloze', 'fishing'
+    content TEXT, -- Stem
+    image_url TEXT, -- Stem images
     pdf_url TEXT,
     ocr_text TEXT,
-    answer_content TEXT,
-    answer_image_url TEXT,
+    options TEXT, -- JSON array of options for choice questions
+    correct_options TEXT, -- JSON array of correct option IDs
+    answer_content TEXT, -- Explanation or Essay Answer
+    answer_image_url TEXT, -- Explanation images
     answer_pdf_url TEXT,
     answer_ocr_text TEXT,
+    correct_count INTEGER DEFAULT 0,
+    wrong_count INTEGER DEFAULT 0,
+    is_marked INTEGER DEFAULT 0,
+    score REAL DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+    FOREIGN KEY (parent_id) REFERENCES questions(id) ON DELETE CASCADE
   );
+`);
 
+// Add columns if they don't exist (for migration)
+try {
+  db.prepare("ALTER TABLE questions ADD COLUMN type TEXT DEFAULT 'essay'").run();
+} catch (e) {}
+try {
+  db.prepare("ALTER TABLE questions ADD COLUMN parent_id TEXT").run();
+} catch (e) {}
+try {
+  db.prepare("ALTER TABLE questions ADD COLUMN options TEXT").run();
+} catch (e) {}
+try {
+  db.prepare("ALTER TABLE questions ADD COLUMN correct_options TEXT").run();
+} catch (e) {}
+try {
+  db.prepare("ALTER TABLE questions ADD COLUMN correct_count INTEGER DEFAULT 0").run();
+} catch (e) {}
+try {
+  db.prepare("ALTER TABLE questions ADD COLUMN wrong_count INTEGER DEFAULT 0").run();
+} catch (e) {}
+try {
+  db.prepare("ALTER TABLE questions ADD COLUMN is_marked INTEGER DEFAULT 0").run();
+} catch (e) {}
+try {
+  db.prepare("ALTER TABLE questions ADD COLUMN score REAL DEFAULT 1").run();
+} catch (e) {}
+try {
+  db.prepare("ALTER TABLE tasks ADD COLUMN category TEXT").run();
+} catch (e) {}
+
+db.exec(`
   CREATE TABLE IF NOT EXISTS nodes (
     id TEXT PRIMARY KEY,
     task_id TEXT NOT NULL,
@@ -121,6 +161,22 @@ db.exec(`
   CREATE TRIGGER IF NOT EXISTS nodes_ad AFTER DELETE ON nodes BEGIN
     DELETE FROM search_index WHERE entity_type = 'node' AND entity_id = old.id;
   END;
+
+  CREATE TABLE IF NOT EXISTS dictionary_entries (
+    id TEXT PRIMARY KEY,
+    task_id TEXT NOT NULL,
+    key TEXT NOT NULL,
+    entries TEXT NOT NULL DEFAULT '[]',
+    synonyms TEXT NOT NULL DEFAULT '[]',
+    antonyms TEXT NOT NULL DEFAULT '[]',
+    comparisons TEXT NOT NULL DEFAULT '[]',
+    query_count INTEGER DEFAULT 0,
+    stars INTEGER DEFAULT 0,
+    review TEXT DEFAULT '',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+  );
 `);
 
 // Seed initial subjects
@@ -151,6 +207,58 @@ if (needsMigration) {
     FROM nodes JOIN tasks ON nodes.task_id = tasks.id;
   `);
   console.log('Migration complete.');
+}
+
+// Migrate dictionaries to tasks
+try {
+  const dictsInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='dictionaries'").get() as any;
+  if (dictsInfo) {
+    console.log('Migrating dictionaries to tasks...');
+    const firstSubject = db.prepare("SELECT id FROM subjects LIMIT 1").get() as any;
+    if (firstSubject) {
+      db.exec(`
+        INSERT INTO tasks (id, subject_id, title, type, category, created_at)
+        SELECT id, '${firstSubject.id}', name, 'B', 'dictionary', created_at FROM dictionaries
+        WHERE id NOT IN (SELECT id FROM tasks);
+      `);
+    }
+    db.exec('DROP TABLE dictionaries;');
+  }
+} catch (e) {
+  console.error('Failed to migrate dictionaries:', e);
+}
+
+// Migrate dictionary_entries to use task_id
+try {
+  const dictEntryInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='dictionary_entries'").get() as any;
+  if (dictEntryInfo && dictEntryInfo.sql.includes("dictionary_id")) {
+    console.log('Migrating dictionary_entries...');
+    db.pragma('foreign_keys = OFF');
+    db.exec(`
+      CREATE TABLE dictionary_entries_new (
+        id TEXT PRIMARY KEY,
+        task_id TEXT NOT NULL,
+        key TEXT NOT NULL,
+        entries TEXT NOT NULL DEFAULT '[]',
+        synonyms TEXT NOT NULL DEFAULT '[]',
+        antonyms TEXT NOT NULL DEFAULT '[]',
+        comparisons TEXT NOT NULL DEFAULT '[]',
+        query_count INTEGER DEFAULT 0,
+        stars INTEGER DEFAULT 0,
+        review TEXT DEFAULT '',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+      );
+      INSERT INTO dictionary_entries_new (id, task_id, key, entries, synonyms, antonyms, comparisons, query_count, stars, review, created_at, updated_at)
+      SELECT id, dictionary_id, key, entries, synonyms, antonyms, comparisons, query_count, stars, review, created_at, updated_at FROM dictionary_entries;
+      DROP TABLE dictionary_entries;
+      ALTER TABLE dictionary_entries_new RENAME TO dictionary_entries;
+    `);
+    db.pragma('foreign_keys = ON');
+  }
+} catch (e) {
+  console.error('Failed to migrate dictionary_entries:', e);
 }
 
 export default db;
